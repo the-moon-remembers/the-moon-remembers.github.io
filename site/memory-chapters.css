@@ -16,6 +16,8 @@
 .memory-room .ambient-note{color:var(--blue);font-size:10px;line-height:1.8;margin:8px 0 0}
 .memory-room .scene-prompt{left:50%;top:var(--scene-hint-y,78%);bottom:auto;width:max-content;max-width:calc(100% - 48px);margin:0;transform:translate(-50%,-50%);text-align:center;font-size:clamp(12px,1vw,17px);line-height:1.8;color:var(--moon);background:#142548b8;border:1px solid #fdf1d745;border-radius:999px;padding:12px 22px;opacity:1;transition:opacity .45s ease;pointer-events:none}
 .memory-room .scene-prompt.is-dismissed{opacity:0}
+.memory-room .scene-buffering{position:absolute;right:18px;bottom:18px;z-index:2;max-width:calc(100% - 36px);margin:0;padding:7px 12px;border:1px solid #fdf1d738;border-radius:20px;background:#142548c9;color:var(--moon);font-size:11px;line-height:1.7;pointer-events:none}
+.memory-room .scene-buffering[hidden]{display:none}
 .memory-room #camera-toggle[aria-pressed=false]:not(:disabled){animation:camera-invitation 1.9s ease-in-out infinite}
 @keyframes camera-invitation{0%,100%{box-shadow:0 0 0 0 #fdf1d70a;border-color:#aec5d566;background:transparent}50%{box-shadow:0 0 0 6px #fdf1d70a,0 0 22px #fdf1d726;border-color:#fdf1d7cc;background:#fdf1d71c}}
 .memory-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(24px,5vw,80px);padding:clamp(36px,6vw,84px) 0 30px;border-top:1px solid #a4cddd35;margin-top:28px}

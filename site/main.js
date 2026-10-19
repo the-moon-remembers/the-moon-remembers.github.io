@@ -38,10 +38,71 @@ const events = [
   { year:"2017", date:"2017", text:"Gulangyu was inscribed as a UNESCO World Heritage Site, recognized as an Historical International Settlement.", image:"photo-2017.png", x:3679,y:148,size:241,tx:3901,ty:48,tw:243 }
 ];
 
+// Timeline requests share two slots. A portrait visit needs photographs only;
+// the original desktop outlines are prepared when that composition is visible.
+function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
+  const records=new Map(),queued=new Set(),running=new Map();
+  let enabled=false,current=0,portrait=isPortrait(),scheduled=false;
+  function record(kind,index){
+    const key=`${kind}:${index}`;
+    if(!records.has(key)){
+      const item={key,kind,index,status:'idle',value:null};
+      item.promise=new Promise((resolve,reject)=>{item.resolve=resolve;item.reject=reject;});
+      item.promise.catch(()=>{});records.set(key,item);
+    }
+    return records.get(key);
+  }
+  function priority(item){return Math.abs(item.index-current)*4+(item.index<current?1:0)+(item.kind==='outline'?1:0);}
+  function schedule(){if(scheduled)return;scheduled=true;Promise.resolve().then(()=>{scheduled=false;drain();});}
+  function request(kind,index){
+    const item=record(kind,index);
+    if(item.status==='idle'){item.status='queued';queued.add(item);schedule();}
+    else if(item.status==='ready'&&!portrait)commit(kind,index,item.value);
+    return item.promise;
+  }
+  function drain(){
+    if(!enabled)return;
+    while(running.size<2&&queued.size){
+      const item=[...queued].sort((a,b)=>priority(a)-priority(b))[0];queued.delete(item);
+      const controller=typeof AbortController==='function'?new AbortController():null;
+      item.status='loading';running.set(item,controller);
+      Promise.resolve().then(()=>load(item.kind,item.index,controller?.signal)).then(value=>{
+        item.status='ready';item.value=value;item.resolve(value);
+        if(!portrait)commit(item.kind,item.index,value);
+      },error=>{
+        if(error?.name==='AbortError'){item.status='idle';return;}
+        item.status='error';item.reject(error);onError(item.kind,item.index,error);
+      }).finally(()=>{
+        running.delete(item);
+        // A rapid second rotation can make a cancelled outline relevant again.
+        if(item.status==='idle'&&!portrait)request(item.kind,item.index);
+        schedule();
+      });
+    }
+  }
+  function refresh(){
+    portrait=isPortrait();if(!enabled)return;
+    if(portrait){
+      for(const item of queued)if(item.kind==='outline'||Math.abs(item.index-current)>1){queued.delete(item);item.status='idle';}
+      for(const [item,controller] of running)if(item.kind==='outline')controller?.abort();
+    }
+    const indices=portrait?[current,current+1,current-1].filter(index=>index>=0&&index<count):Array.from({length:count},(_,index)=>index);
+    for(const index of indices){request('photo',index);if(!portrait)request('outline',index);}
+    schedule();
+  }
+  return{
+    focus(index){const next=Math.min(count-1,Math.max(0,index));if(enabled&&next===current&&portrait===isPortrait())return;current=next;enabled=true;refresh();},
+    photo(index){if(!enabled){current=index;enabled=true;refresh();}return request('photo',index);},
+    refresh,
+    getState:()=>({enabled,current,portrait,active:[...running.keys()].map(item=>item.key),queued:[...queued].map(item=>item.key),ready:[...records.values()].filter(item=>item.status==='ready').map(item=>item.key)})
+  };
+}
+
 const yearArc = document.querySelector("#year-arc");
 const track = document.querySelector("#timeline-track");
 const yearNodes = [];
 const captionStates = [];
+const timelinePhotos=[];
 const timelineDesign = window.TIMELINE_DESIGN;
 const orbitGeometry = {cx:555, cy:-925, radius:1081, sweep:.48};
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -53,14 +114,21 @@ const portraitHistory=document.createElement('div');portraitHistory.className='p
 portraitHistory.innerHTML='<div class="portrait-history-cap" aria-hidden="true"></div><p class="portrait-history-label">XIAMEN · A MEMORY ATLAS</p><div class="portrait-years" aria-label="Timeline years"></div><button type="button" class="portrait-history-photo"><div class="timeline-photo-surface"><img class="timeline-photo-image" alt=""><img class="timeline-photo-image timeline-photo-cyanotype" alt="" aria-hidden="true"><span class="timeline-photo-atmosphere" aria-hidden="true"></span></div></button><div class="portrait-history-caption"><h2></h2><p></p></div>';
 history.querySelector('.sticky-scene').append(portraitHistory);
 const portraitPhoto=portraitHistory.querySelector('button'),portraitCopy=portraitHistory.querySelector('.portrait-history-caption p');
-let portraitIndex=-1,portraitTimer,portraitTyping,portraitLanguage='';
+let portraitIndex=-1,portraitTimer,portraitTyping,portraitLanguage='',portraitRequest=0;
 function showPortraitEvent(index){
   const lang=document.documentElement.lang;if(portraitIndex===index&&portraitLanguage===lang)return;
-  const first=portraitIndex<0;portraitIndex=index;portraitLanguage=lang;clearTimeout(portraitTimer);cancelAnimationFrame(portraitTyping);portraitHistory.classList.add('is-changing');
+  const first=portraitIndex<0,requestId=++portraitRequest;portraitIndex=index;portraitLanguage=lang;clearTimeout(portraitTimer);cancelAnimationFrame(portraitTyping);portraitHistory.classList.add('is-changing');
+  timelineLoader.focus(index);
   const fill=()=>{
     const event=events[index];portraitHistory.querySelector('h2').textContent=event.date;
-    portraitPhoto.setAttribute('aria-label',`Xiamen, ${event.year}`);portraitPhoto.dataset.kind=event.year==='1970'?'aerial':'street';
-    portraitPhoto.querySelectorAll('img').forEach(img=>{img.src=`./assets/${event.image}`;});
+    portraitPhoto.setAttribute('aria-busy','true');
+    timelineLoader.photo(index).then(image=>{
+      if(requestId!==portraitRequest)return;
+      // Keep the last decoded photograph until the requested year is ready.
+      // A slower response for an earlier year must never replace the latest one.
+      portraitPhoto.querySelectorAll('img').forEach(img=>{img.src=image.src;});
+      portraitPhoto.setAttribute('aria-label',`Xiamen, ${event.year}`);portraitPhoto.dataset.kind=event.year==='1970'?'aerial':'street';portraitPhoto.setAttribute('aria-busy','false');
+    }).catch(()=>{if(requestId===portraitRequest)portraitPhoto.setAttribute('aria-busy','false');});
     portraitHistory.querySelector('.portrait-years').replaceChildren(...events.slice(Math.max(0,Math.min(index-2,events.length-5)),Math.max(0,Math.min(index-2,events.length-5))+5).map(e=>{const node=document.createElement('span');node.textContent=e.year;if(e===event)node.setAttribute('aria-current','date');return node;}));
     const text=lang==='zh-Hans'?historyChinese[index].split('\n').slice(1).join('\n'):event.text;
     portraitCopy.setAttribute('aria-label',text);portraitCopy.textContent=reducedMotion?text:'';portraitHistory.classList.remove('is-changing');
@@ -112,11 +180,12 @@ events.forEach((event, index) => {
   photo.type = "button";
   photo.setAttribute('aria-label',`Xiamen, ${event.year}`);
   photo.dataset.kind=event.year==='1970'?'aerial':'street';
-  const photograph=document.createElement('img');photograph.className='timeline-photo-image';photograph.src=`./assets/${event.image}`;photograph.alt='';
+  const photograph=document.createElement('img');photograph.className='timeline-photo-image';photograph.alt='';photograph.decoding='async';
   const surface=document.createElement('div');surface.className='timeline-photo-surface';
   const cyanotype=photograph.cloneNode();cyanotype.className='timeline-photo-image timeline-photo-cyanotype';cyanotype.setAttribute('aria-hidden','true');
   const atmosphere=document.createElement('span');atmosphere.className='timeline-photo-atmosphere';atmosphere.setAttribute('aria-hidden','true');
   surface.append(photograph,cyanotype,atmosphere);photo.append(surface);
+  timelinePhotos.push([photograph,cyanotype]);
   let hoverTimer;
   let panAnimation;
   const reducedMemoryMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -156,9 +225,26 @@ events.forEach((event, index) => {
   const state = {element:caption,design,glyphs:[],englishGlyphs:[],chineseGlyphs:[...cn.children],started:null,count:-1,index};
   if(document.documentElement.lang==='zh-Hans')state.glyphs=state.chineseGlyphs;
   captionStates.push(state);
-  fetch(`./assets/${design.asset}${event.year==='1930'?'?v=journey24':''}`)
-    .then(response => { if (!response.ok) throw new Error(design.asset); return response.text(); })
-    .then(text => {
+});
+
+const timelineLoader=createTimelineLoader({
+  count:events.length,isPortrait:()=>portraitLayout.matches,
+  load(kind,index,signal){
+    const event=events[index],design=captionStates[index].design;
+    if(kind==='outline')return fetch(`./assets/${design.asset}${event.year==='1930'?'?v=journey24':''}`,{signal}).then(response=>{if(!response.ok)throw new Error(design.asset);return response.text();});
+    return new Promise((resolve,reject)=>{
+      const image=new Image();image.decoding='async';image.fetchPriority=index===Math.round(range(progress(history),.05,.83)*(events.length-1))?'high':'low';
+      image.onload=()=>Promise.resolve(image.decode?.()).catch(()=>{}).then(()=>resolve(image));image.onerror=()=>reject(new Error(event.image));image.src=`./assets/${event.image}`;
+    });
+  },
+  commit(kind,index,value){
+    if(portraitLayout.matches)return;
+    if(kind==='photo'){for(const image of timelinePhotos[index])if(image.getAttribute('src')!==value.src)image.src=value.src;return;}
+    const state=captionStates[index],{element:caption,design}=state;
+    if(state.outlineReady)return;
+    state.outlineReady=true;
+    try{
+      const text=value;
       const svg = new DOMParser().parseFromString(text, "image/svg+xml").documentElement;
       svg.setAttribute("aria-hidden", "true");
       svg.style.transform = `scale(${design.scale})`;
@@ -167,8 +253,22 @@ events.forEach((event, index) => {
       caption.append(document.importNode(svg, true));
       state.englishGlyphs = Array.from(caption.querySelectorAll("[data-glyph]"));
       state.glyphs=document.documentElement.lang==='zh-Hans'?state.chineseGlyphs:state.englishGlyphs;
-    }).catch(error => { console.error("Unable to load timeline outlines", error); caption.textContent=design.text; });
+      state.count=-1;invalidateStory();
+    }catch(error){console.error('Unable to prepare timeline outlines',error);caption.textContent=design.text;}
+  },
+  onError(kind,index,error){if(kind==='outline'){console.error('Unable to load timeline outlines',error);if(!portraitLayout.matches)captionStates[index].element.textContent=captionStates[index].design.text;}}
 });
+let timelineNear=false,timelineFocusFrame=0;
+function focusVisibleTimeline(){
+  timelineFocusFrame=0;if(!timelineNear)return;
+  timelineLoader.focus(Math.round(range(progress(history),.05,.83)*(events.length-1)));
+}
+if(typeof IntersectionObserver==='function'){
+  const timelineObserver=new IntersectionObserver(entries=>{timelineNear=entries[0].isIntersecting;if(timelineNear)focusVisibleTimeline();},{rootMargin:'1000px 0px'});timelineObserver.observe(history);
+}
+else{timelineNear=true;focusVisibleTimeline();}
+window.addEventListener('scroll',()=>{if(timelineNear&&!timelineFocusFrame)timelineFocusFrame=requestAnimationFrame(focusVisibleTimeline);},{passive:true});
+portraitLayout.addEventListener?.('change',()=>{timelineLoader.refresh();if(timelineNear)focusVisibleTimeline();});
 
 function clamp(value, min = 0, max = 1) { return Math.min(max, Math.max(min, value)); }
 function range(value, start, end) { return clamp((value - start) / (end - start)); }
@@ -523,3 +623,5 @@ window.addEventListener("pageshow",event=>{if(event.persisted)resetChapterTransi
 window.addEventListener("moon-navigation-restored",resetChapterTransition);
 setScale();
 requestStoryFrame();
+// Core Home navigation is ready even if distant photographs/fonts are pending.
+document.body.dataset.shellReady='true';try{parent.MoonApp?.chapterReady(window);}catch{}

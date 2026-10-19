@@ -8,7 +8,7 @@ if(choice){
     preload.disconnect();
     // Prepare only the small detail-page code. Never fetch all six films or
     // initialise a second renderer / camera behind the current page.
-    for(const [rel,href] of [['prefetch','./lost.html?v=performance27'],...['lost','memory-water','memory-media','memory-records','memory-interaction'].map(name=>['modulepreload',`./${name}.js?v=performance27`])]){
+    for(const [rel,href] of [['prefetch','./lost.html?v=loading28'],...['lost','memory-water','memory-media','memory-records','memory-interaction'].map(name=>['modulepreload',`./${name}.js?v=${['lost','memory-media'].includes(name)?'loading28':'performance27'}`])]){
       const link=document.createElement('link');link.rel=rel;link.href=href;
       if(rel==='preload')link.as='image';
       link.fetchPriority='low';document.head.append(link);

@@ -5,8 +5,9 @@ html[lang=zh-Hans] body{font-family:'PingFang SC','Microsoft YaHei',sans-serif}h
 @media(prefers-reduced-motion:reduce){.title-en-cn{animation:none}}
 .caption-cn{white-space:pre-line}.caption-cn span{opacity:0}html[lang=zh-Hans] .object-caption h3{font-family:'Songti SC','SimSun',serif;font-size:23px}html[lang=zh-Hans] .archive-copy,html[lang=zh-Hans] .object-caption p{line-height:2}html[lang=zh-Hans] .chapter-footer>p{font-family:'Songti SC','SimSun',serif}
 /* One shared brand font stack: Krona owns Latin glyphs, DaoLiTi owns Chinese. */
-@font-face{font-family:'Krona One';src:url('./assets/KronaOne-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
-@font-face{font-family:'Alimama DaoLiTi';src:url('./assets/AlimamaDaoLiTi-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:'Krona One';src:url('./assets/KronaOne-Regular.woff2') format('woff2'),url('./assets/KronaOne-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:'Alimama DaoLiTi';src:url('./assets/AlimamaDaoLiTi-Regular.woff2') format('woff2'),url('./assets/AlimamaDaoLiTi-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:'Alimama DaoLiTi';src:url('./assets/AlimamaDaoLiTi-language.woff2') format('woff2');unicode-range:U+4E2D,U+6587;font-weight:400;font-display:swap}
 body,body *{font-family:'Krona One','Alimama DaoLiTi','PingFang SC',sans-serif!important;font-synthesis:none}
 html[lang=zh-Hans] .archive-copy,html[lang=zh-Hans] .object-caption p,html[lang=zh-Hans] .memory-story>div>p:not(.eyebrow),html[lang=zh-Hans] .memory-notes p{font-size:19px;line-height:1.9;letter-spacing:.045em}
 html[lang=zh-Hans] .chapter-preferences button{font-size:14px}html[lang=zh-Hans] .chapter-preferences [data-music-toggle]{font-size:20px}html[lang=zh-Hans] .title-en-cn{font-size:48px}

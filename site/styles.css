@@ -1,4 +1,4 @@
-@font-face{font-family:"Krona One";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/KronaOne-Regular.ttf") format("truetype")}
+@font-face{font-family:"Krona One";font-style:normal;font-weight:400;font-display:swap;src:url("./assets/KronaOne-Regular.woff2") format("woff2"),url("./assets/KronaOne-Regular.ttf") format("truetype")}
 :root{color-scheme:dark;font-family:"Krona One",sans-serif;background:#142548}
 *{box-sizing:border-box}html{scroll-behavior:auto}body{margin:0;overflow-x:hidden;background:#142548}button{font:inherit;cursor:pointer}
 .scroll-section{position:relative}.intro-section{height:340vh}.sticky-scene{position:sticky;top:0;height:100vh;overflow:hidden}

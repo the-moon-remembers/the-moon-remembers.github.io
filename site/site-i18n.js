@@ -38,6 +38,8 @@ Object.assign(copy,{
 copy["The designer’s layered Xiamen island map"]="设计者提供的厦门岛分层地图";
 copy["Continue into the memory constellation"]="继续走进城市的记忆照片球";
 copy["The city gathers its memories…"]="城市正在收拢它的记忆……";
+copy["Preparing moving memories…"]="正在准备流动的记忆……";
+copy["Buffering moving memories…"]="记忆影像正在缓冲……";
 copy["Field recordings to follow · background music is separate"]="实地声音档案待补充 · 背景音乐另行播放";
 const normal=s=>s.trim().replace(/\s+/g,' '),dictionary=new Map(Object.entries(copy).map(([en,zh])=>[normal(en),zh]));
 const originalText=new WeakMap(),originalAttrs=new WeakMap();let language='en';

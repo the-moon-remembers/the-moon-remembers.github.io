@@ -1,6 +1,6 @@
 import {MemoryWater} from './memory-water.js?v=performance27';
 import {memories} from './memory-records.js?v=performance27';
-import {MemoryMedia} from './memory-media.js?v=performance27';
+import {MemoryMedia} from './memory-media.js?v=loading28';
 import {brushRadius,MemoryGuidance} from './memory-interaction.js?v=performance27';
 const $=s=>document.querySelector(s);
 const room=$('#memory-room'),view=$('#memory-view'),canvas=$('#memory-canvas'),range=$('#reveal-range'),status=$('#interaction-status'),video=$('#hand-video'),cameraButton=$('#camera-toggle');
@@ -18,7 +18,7 @@ window.addEventListener('scroll',placeGuidance,{passive:true});window.addEventLi
 function clearTouches(){for(const id of [...touches.keys()])if(view.hasPointerCapture?.(id))view.releasePointerCapture(id);touches.clear();view.dataset.touchPoints='0';}
 function touchPoint(e){const r=view.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height)),radius:brushRadius.touch};}
 function updateTouch(e){if(!touches.has(e.pointerId)&&touches.size>=5)return false;touches.set(e.pointerId,touchPoint(e));view.dataset.touchPoints=String(touches.size);demoStart=0;pointer=null;return true;}
-const media=new MemoryMedia({present:$('#scene-present-video'),earlier:$('#scene-earlier-video'),audio:$('#street-audio'),motion:$('#motion-toggle'),sound:$('#ambient-toggle'),note:$('#ambient-note'),view,reduced,onError:setStatus,preferences:()=>{try{return parent.MoonApp?.getState()||{enabled:true};}catch{return{enabled:true};}}});
+const media=new MemoryMedia({present:$('#scene-present-video'),earlier:$('#scene-earlier-video'),audio:$('#street-audio'),motion:$('#motion-toggle'),sound:$('#ambient-toggle'),note:$('#ambient-note'),view,reduced,onError:setStatus,onBuffer:(active,text)=>{const hint=$('#scene-buffering');if(!hint)return;hint.hidden=!active;if(text&&hint.textContent!==text)hint.textContent=text;},preferences:()=>{try{return parent.MoonApp?.getState()||{enabled:true};}catch{return{enabled:true};}}});
 media.hidden=document.hidden;
 new IntersectionObserver(entries=>{inView=entries[0].isIntersecting;media.inView=inView;media.sync();if(inView)wakeFrame();else{suspendFrame();if(stream||cameraBusy)stopCamera('The camera was turned off when this page left the foreground.');}},{threshold:.01}).observe(view);
 const image=src=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('image'));img.src='./assets/'+src;});
