@@ -43,12 +43,15 @@ const events = [
 function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
   const records=new Map(),queued=new Set(),running=new Map();
   let enabled=false,current=0,portrait=isPortrait(),scheduled=false;
+  function resetPromise(item){
+    item.promise=new Promise((resolve,reject)=>{item.resolve=resolve;item.reject=reject;});
+    item.promise.catch(()=>{});item.settled=false;
+  }
   function record(kind,index){
     const key=`${kind}:${index}`;
     if(!records.has(key)){
       const item={key,kind,index,status:'idle',value:null};
-      item.promise=new Promise((resolve,reject)=>{item.resolve=resolve;item.reject=reject;});
-      item.promise.catch(()=>{});records.set(key,item);
+      resetPromise(item);records.set(key,item);
     }
     return records.get(key);
   }
@@ -56,7 +59,10 @@ function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
   function schedule(){if(scheduled)return;scheduled=true;Promise.resolve().then(()=>{scheduled=false;drain();});}
   function request(kind,index){
     const item=record(kind,index);
-    if(item.status==='idle'){item.status='queued';queued.add(item);schedule();}
+    // A failed portrait photo is retryable on a revisit/tap, not a permanently
+    // rejected cache entry that keeps the last successful year on screen.
+    if(portrait&&kind==='photo'&&item.status==='error')item.status='idle';
+    if(item.status==='idle'){if(item.settled)resetPromise(item);item.status='queued';queued.add(item);schedule();}
     else if(item.status==='ready'&&!portrait)commit(kind,index,item.value);
     return item.promise;
   }
@@ -67,15 +73,16 @@ function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
       const controller=typeof AbortController==='function'?new AbortController():null;
       item.status='loading';running.set(item,controller);
       Promise.resolve().then(()=>load(item.kind,item.index,controller?.signal)).then(value=>{
-        item.status='ready';item.value=value;item.resolve(value);
+        item.status='ready';item.value=value;item.settled=true;item.resolve(value);
         if(!portrait)commit(item.kind,item.index,value);
       },error=>{
-        if(error?.name==='AbortError'){item.status='idle';return;}
+        item.settled=true;
+        if(error?.name==='AbortError'){item.status='idle';item.reject(error);return;}
         item.status='error';item.reject(error);onError(item.kind,item.index,error);
       }).finally(()=>{
         running.delete(item);
         // A rapid second rotation can make a cancelled outline relevant again.
-        if(item.status==='idle'&&!portrait)request(item.kind,item.index);
+        if(item.status==='idle'&&(!portrait||(item.kind==='photo'&&Math.abs(item.index-current)<=1)))request(item.kind,item.index);
         schedule();
       });
     }
@@ -84,7 +91,7 @@ function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
     portrait=isPortrait();if(!enabled)return;
     if(portrait){
       for(const item of queued)if(item.kind==='outline'||Math.abs(item.index-current)>1){queued.delete(item);item.status='idle';}
-      for(const [item,controller] of running)if(item.kind==='outline')controller?.abort();
+      for(const [item,controller] of running)if(item.kind==='outline'||Math.abs(item.index-current)>1)controller?.abort();
     }
     const indices=portrait?[current,current+1,current-1].filter(index=>index>=0&&index<count):Array.from({length:count},(_,index)=>index);
     for(const index of indices){request('photo',index);if(!portrait)request('outline',index);}
@@ -96,6 +103,22 @@ function createTimelineLoader({count,isPortrait,load,commit,onError=()=>{}}){
     refresh,
     getState:()=>({enabled,current,portrait,active:[...running.keys()].map(item=>item.key),queued:[...queued].map(item=>item.key),ready:[...records.values()].filter(item=>item.status==='ready').map(item=>item.key)})
   };
+}
+
+function loadTimelinePhoto(src,{signal,priority='low',timeoutMs=0}={}){
+  return new Promise((resolve,reject)=>{
+    const image=new Image();let settled=false,timer;
+    image.decoding='async';image.fetchPriority=priority;
+    const clean=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);image.onload=image.onerror=null;};
+    const fail=error=>{if(settled)return;settled=true;clean();image.removeAttribute('src');reject(error);};
+    const abort=()=>fail(Object.assign(new Error('Photo request superseded'),{name:'AbortError'}));
+    image.onload=()=>Promise.resolve(image.decode?.()).then(()=>{if(settled)return;settled=true;clean();resolve(image);},fail);
+    image.onerror=()=>fail(new Error('Photograph could not load'));
+    if(signal?.aborted){abort();return;}
+    signal?.addEventListener('abort',abort,{once:true});
+    if(timeoutMs)timer=setTimeout(()=>fail(Object.assign(new Error('Photograph is taking too long'),{name:'TimeoutError'})),timeoutMs);
+    image.src=src;
+  });
 }
 
 const yearArc = document.querySelector("#year-arc");
@@ -111,24 +134,33 @@ let portraitBoardHeight=625;
 let previousPortrait=portraitLayout.matches,viewportAnchor=null;
 // A separately composed portrait timeline; never move the Figma desktop nodes.
 const portraitHistory=document.createElement('div');portraitHistory.className='portrait-history';
-portraitHistory.innerHTML='<div class="portrait-history-cap" aria-hidden="true"></div><p class="portrait-history-label">XIAMEN · A MEMORY ATLAS</p><div class="portrait-years" aria-label="Timeline years"></div><button type="button" class="portrait-history-photo"><div class="timeline-photo-surface"><img class="timeline-photo-image" alt=""><img class="timeline-photo-image timeline-photo-cyanotype" alt="" aria-hidden="true"><span class="timeline-photo-atmosphere" aria-hidden="true"></span></div></button><div class="portrait-history-caption"><h2></h2><p></p></div>';
+portraitHistory.innerHTML='<div class="portrait-history-cap" aria-hidden="true"></div><p class="portrait-history-label">XIAMEN · A MEMORY ATLAS</p><div class="portrait-years" aria-label="Timeline years"></div><button type="button" class="portrait-history-photo"><div class="timeline-photo-surface"><img class="timeline-photo-image" alt=""><img class="timeline-photo-image timeline-photo-cyanotype" alt="" aria-hidden="true"><span class="timeline-photo-atmosphere" aria-hidden="true"></span></div><span class="portrait-photo-status" role="status" aria-live="polite" hidden></span></button><div class="portrait-history-caption"><h2></h2><p></p></div>';
 history.querySelector('.sticky-scene').append(portraitHistory);
 const portraitPhoto=portraitHistory.querySelector('button'),portraitCopy=portraitHistory.querySelector('.portrait-history-caption p');
 let portraitIndex=-1,portraitTimer,portraitTyping,portraitLanguage='',portraitRequest=0;
-function showPortraitEvent(index){
-  const lang=document.documentElement.lang;if(portraitIndex===index&&portraitLanguage===lang)return;
+function showPortraitEvent(index,force=false){
+  const lang=document.documentElement.lang;if(!force&&portraitIndex===index&&portraitLanguage===lang)return;
   const first=portraitIndex<0,requestId=++portraitRequest;portraitIndex=index;portraitLanguage=lang;clearTimeout(portraitTimer);cancelAnimationFrame(portraitTyping);portraitHistory.classList.add('is-changing');
+  const event=events[index],zh=lang==='zh-Hans',status=portraitPhoto.querySelector('.portrait-photo-status');
+  const photoState=state=>{
+    portraitPhoto.dataset.photoState=state;portraitPhoto.dataset.photoYear=state==='ready'?event.year:'';
+    portraitPhoto.setAttribute('aria-busy',String(state==='loading'));
+    status.hidden=state==='ready';status.textContent=state==='error'?(zh?'照片暂未加载，点击重试。':'Photograph unavailable. Tap to retry.'):(zh?'正在加载 '+event.year+' 年的照片……':'Loading '+event.year+' photograph…');
+  };
+  // Never label a previous photograph as the newly selected year, even while
+  // the current original is downloading, fails, or the visitor swipes quickly.
+  portraitPhoto.querySelectorAll('img').forEach(img=>img.removeAttribute('src'));
+  portraitPhoto.classList.remove('memory-active','memory-playing');photoState('loading');
+  portraitPhoto.setAttribute('aria-label',zh?'厦门，'+event.year:`Xiamen, ${event.year}`);
   timelineLoader.focus(index);
   const fill=()=>{
     const event=events[index];portraitHistory.querySelector('h2').textContent=event.date;
-    portraitPhoto.setAttribute('aria-busy','true');
     timelineLoader.photo(index).then(image=>{
       if(requestId!==portraitRequest)return;
-      // Keep the last decoded photograph until the requested year is ready.
-      // A slower response for an earlier year must never replace the latest one.
+      // Both image layers are committed only for this exact selected year.
       portraitPhoto.querySelectorAll('img').forEach(img=>{img.src=image.src;});
-      portraitPhoto.setAttribute('aria-label',`Xiamen, ${event.year}`);portraitPhoto.dataset.kind=event.year==='1970'?'aerial':'street';portraitPhoto.setAttribute('aria-busy','false');
-    }).catch(()=>{if(requestId===portraitRequest)portraitPhoto.setAttribute('aria-busy','false');});
+      portraitPhoto.dataset.kind=event.year==='1970'?'aerial':'street';photoState('ready');
+    }).catch(error=>{if(requestId!==portraitRequest)return;if(error?.name==='AbortError'){showPortraitEvent(index,true);return;}photoState('error');});
     portraitHistory.querySelector('.portrait-years').replaceChildren(...events.slice(Math.max(0,Math.min(index-2,events.length-5)),Math.max(0,Math.min(index-2,events.length-5))+5).map(e=>{const node=document.createElement('span');node.textContent=e.year;if(e===event)node.setAttribute('aria-current','date');return node;}));
     const text=lang==='zh-Hans'?historyChinese[index].split('\n').slice(1).join('\n'):event.text;
     portraitCopy.setAttribute('aria-label',text);portraitCopy.textContent=reducedMotion?text:'';portraitHistory.classList.remove('is-changing');
@@ -136,7 +168,7 @@ function showPortraitEvent(index){
   };
   if(first||reducedMotion)fill();else portraitTimer=setTimeout(fill,160);
 }
-function pulsePortraitMemory(){portraitPhoto.classList.add('memory-active','memory-playing');clearTimeout(portraitPhoto.memoryTimer);portraitPhoto.memoryTimer=setTimeout(()=>portraitPhoto.classList.remove('memory-active','memory-playing'),2800);}
+function pulsePortraitMemory(){if(portraitPhoto.dataset.photoState==='error'){showPortraitEvent(portraitIndex,true);return;}if(portraitPhoto.dataset.photoState!=='ready')return;portraitPhoto.classList.add('memory-active','memory-playing');clearTimeout(portraitPhoto.memoryTimer);portraitPhoto.memoryTimer=setTimeout(()=>portraitPhoto.classList.remove('memory-active','memory-playing'),2800);}
 portraitPhoto.addEventListener('click',pulsePortraitMemory);portraitPhoto.addEventListener('pointerenter',pulsePortraitMemory);portraitPhoto.addEventListener('pointerleave',()=>portraitPhoto.classList.remove('memory-active'));portraitPhoto.addEventListener('blur',()=>portraitPhoto.classList.remove('memory-active'));
 const linkLayer = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 linkLayer.classList.add("timeline-link");
@@ -232,10 +264,7 @@ const timelineLoader=createTimelineLoader({
   load(kind,index,signal){
     const event=events[index],design=captionStates[index].design;
     if(kind==='outline')return fetch(`./assets/${design.asset}${event.year==='1930'?'?v=journey24':''}`,{signal}).then(response=>{if(!response.ok)throw new Error(design.asset);return response.text();});
-    return new Promise((resolve,reject)=>{
-      const image=new Image();image.decoding='async';image.fetchPriority=index===Math.round(range(progress(history),.05,.83)*(events.length-1))?'high':'low';
-      image.onload=()=>Promise.resolve(image.decode?.()).catch(()=>{}).then(()=>resolve(image));image.onerror=()=>reject(new Error(event.image));image.src=`./assets/${event.image}`;
-    });
+    return loadTimelinePhoto(`./assets/${event.image}`,{signal,priority:index===Math.round(range(progress(history),.05,.83)*(events.length-1))?'high':'low',timeoutMs:portraitLayout.matches?25000:0});
   },
   commit(kind,index,value){
     if(portraitLayout.matches)return;

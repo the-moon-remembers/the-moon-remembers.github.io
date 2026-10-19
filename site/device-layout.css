@@ -54,6 +54,10 @@
   .portrait-years span{opacity:.5}.portrait-years [aria-current]{opacity:1;color:#fdf1d7;transform:scale(1.16)}
   .portrait-history-photo{flex:none;position:relative;width:min(67vw,420px);height:auto;aspect-ratio:1;border-radius:50%;border:2px solid #fdf1d7;background:#142548;padding:0;overflow:hidden;isolation:isolate;box-shadow:0 0 0 6px #fdf1d70c;transition:opacity .22s}
   .portrait-history-photo .timeline-photo-surface{height:100%;width:100%;position:absolute;inset:0}
+  .portrait-history-photo[data-photo-state=loading] .timeline-photo-surface,.portrait-history-photo[data-photo-state=error] .timeline-photo-surface{visibility:hidden}
+  .portrait-photo-status{position:absolute;inset:22%;display:grid;place-items:center;color:#aec5d5;font-size:11px;line-height:1.8;text-align:center;pointer-events:none}
+  .portrait-photo-status[hidden]{display:none}
+  html[lang=zh-Hans] .portrait-photo-status{font-size:16px}
   .portrait-history-photo.memory-active .timeline-photo-cyanotype{opacity:1}
   .portrait-history-photo.memory-active .timeline-photo-atmosphere{opacity:1}
   .portrait-history-caption{max-width:600px;width:100%;text-align:center;min-height:195px;transition:opacity .22s}
