@@ -1,0 +1,38 @@
+name: Publish The Moon Remembers
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Read public website files
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload website only
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+          retention-days: 1
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

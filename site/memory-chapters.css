@@ -1,0 +1,39 @@
+/* Detail rooms only: the desktop Home composition is deliberately untouched. */
+.memory-room{--memory-gutter:clamp(12px,2vw,40px);padding-inline:var(--memory-gutter)}
+/* Scene and photo cards share the same modest page gutters. */
+.memory-room .memory-view{width:100%;height:auto;min-height:0;max-width:none;aspect-ratio:4/3;margin-inline:0}
+.memory-room .scene-earlier-fallback{clip-path:inset(0 calc(100% - var(--fallback-reveal,0%)) 0 0)}
+.memory-room .scene-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;opacity:0}
+.memory-room .scene-video.has-frame{opacity:1}
+.memory-room .scene-earlier-video{clip-path:inset(0 calc(100% - var(--fallback-reveal,0%)) 0 0)}
+.memory-room #memory-canvas{position:absolute;inset:0;z-index:1}
+.memory-room .scene-vignette,.memory-room .scene-top,.memory-room .scene-prompt,.memory-room .scene-loading,.memory-room .camera-preview{z-index:2}
+.memory-room .scene-video,.memory-room .scene-fallback{filter:none}
+.memory-room .tool-buttons{flex-wrap:wrap;gap:10px}
+.memory-room .tool-buttons button{min-height:44px;font-size:11px}
+.memory-room .tool-buttons button[hidden],.memory-room .ambient-note[hidden]{display:none}
+.memory-room .tool-buttons button:disabled{opacity:.45;cursor:default}
+.memory-room .ambient-note{color:var(--blue);font-size:10px;line-height:1.8;margin:8px 0 0}
+.memory-room .scene-prompt{left:50%;top:var(--scene-hint-y,78%);bottom:auto;width:max-content;max-width:calc(100% - 48px);margin:0;transform:translate(-50%,-50%);text-align:center;font-size:clamp(12px,1vw,17px);line-height:1.8;color:var(--moon);background:#142548b8;border:1px solid #fdf1d745;border-radius:999px;padding:12px 22px;opacity:1;transition:opacity .45s ease;pointer-events:none}
+.memory-room .scene-prompt.is-dismissed{opacity:0}
+.memory-room #camera-toggle[aria-pressed=false]:not(:disabled){animation:camera-invitation 1.9s ease-in-out infinite}
+@keyframes camera-invitation{0%,100%{box-shadow:0 0 0 0 #fdf1d70a;border-color:#aec5d566;background:transparent}50%{box-shadow:0 0 0 6px #fdf1d70a,0 0 22px #fdf1d726;border-color:#fdf1d7cc;background:#fdf1d71c}}
+.memory-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(24px,5vw,80px);padding:clamp(36px,6vw,84px) 0 30px;border-top:1px solid #a4cddd35;margin-top:28px}
+.memory-pair .eyebrow{color:var(--blue);font-size:10px;letter-spacing:.15em;margin:0 0 16px}
+.memory-pair h2{font-family:inherit;font-size:clamp(18px,2vw,30px);font-weight:400;line-height:1.45;min-height:2.9em;margin:0 0 24px;color:var(--moon)}
+.memory-pair figure{margin:0}
+.memory-pair img{width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;object-position:center;border-radius:4px;display:block;border:1px solid #c2e0e935}
+.memory-pair figcaption{font-size:9px;line-height:1.8;color:#bbcad8;margin-top:12px;min-height:3.6em}
+.memory-pair article>p:last-child{font-size:12px;line-height:2;color:#ede5d6;margin:20px 0 0;max-width:58ch}
+.memory-context{max-width:920px;margin:0 auto 34px}
+.memory-context .asset-note{font-size:10px;line-height:1.9;color:#b7c7d8}
+.memory-context .image-credit{font-size:10px;line-height:1.9}
+.memory-context .image-credit p{margin:10px 0}
+.memory-context a{color:var(--blue);text-underline-offset:4px}
+.memory-return{display:flex;justify-content:center;padding:18px 8vw 68px}
+.memory-return .text-link{display:inline-flex;align-items:center;justify-content:center;min-width:220px;min-height:80px;font-size:clamp(26px,3vw,40px);letter-spacing:.1em;border:1px solid #fdf1d780;border-radius:999px;padding:18px 42px;transition:background .3s,border-color .3s,transform .3s}
+.memory-return .text-link::before{content:'←';margin-right:22px;font-family:Arial,sans-serif;font-size:1em}
+.memory-return .text-link:hover{background:#fdf1d712;border-color:#fdf1d7;transform:translateY(-3px)}
+.memory-return .text-link:focus-visible{outline:2px solid var(--blue);outline-offset:7px}
+@media(max-width:700px){.memory-pair{grid-template-columns:1fr;gap:40px}.memory-pair h2{min-height:0;margin-bottom:18px}.memory-pair figcaption{min-height:0}.memory-pair article>p:last-child{font-size:11px}.memory-room .experience-tools{gap:16px}.memory-room .tool-buttons button{font-size:10px}.memory-return .text-link{min-width:200px;min-height:72px}.memory-room .scene-top{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.memory-return .text-link,.memory-room .scene-prompt{transition:none}.memory-return .text-link:hover{transform:none}.memory-room #camera-toggle[aria-pressed=false]:not(:disabled){animation:none}}

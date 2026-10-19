@@ -1,0 +1,9 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="1155.84" height="526.288" viewBox="0 0 1155.84 526.288" fill="none" xmlns="http://www.w3.org/2000/svg">
+<style>path{transform-box:fill-box;transform-origin:center;animation:thread-a 13s ease-in-out infinite alternate}path:nth-child(3n+1){animation-name:thread-b;animation-duration:17s;animation-delay:-5s}path:nth-child(3n+2){animation-name:thread-c;animation-duration:19s;animation-delay:-8s}@keyframes thread-a{from{transform:translate(-6px,3px) rotate(-.3deg)}to{transform:translate(7px,-5px) rotate(.25deg)}}@keyframes thread-b{from{transform:translate(5px,-7px) rotate(.4deg)}to{transform:translate(-7px,5px) rotate(-.3deg)}}@keyframes thread-c{from{transform:translate(-4px,-5px) rotate(-.2deg)}to{transform:translate(6px,6px) rotate(.35deg)}}@media(prefers-reduced-motion:reduce){path{animation:none}}</style>
+<g id="Group 9">
+<path id="Vector 21" d="M32.3408 469.642C60.6742 483.142 136.941 484.942 215.341 384.142C293.741 283.342 259.007 436.809 231.841 526.142" stroke="white"/>
+<path id="Vector 19" d="M32.3408 33.6423C35.6742 157.142 100.841 362.842 334.841 197.642C360.841 173.809 431.741 159.442 507.341 292.642" stroke="white"/>
+<path id="Vector 23" d="M1155.34 102.642C1152.51 49.6425 1124.14 -31.4575 1033.34 68.1425C942.541 167.742 835.841 84.9758 793.841 31.1424C756.174 1.30913 687.041 -33.0575 711.841 68.1425C736.641 169.342 716.174 220.309 702.841 233.142" stroke="white"/>
+<path id="Vector 25" d="M5.34102 357.142C-7.65898 304.976 -2.35898 222.342 122.841 309.142C137.508 321.976 193.341 332.042 299.341 269.642C405.341 207.242 378.507 348.642 351.841 427.142" stroke="white"/>
+</g>
+</svg>
