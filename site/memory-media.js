@@ -2,7 +2,7 @@
 export class MemoryMedia {
   constructor({present,earlier,audio,motion,sound,note,view,reduced,onError,preferences}){
     Object.assign(this,{present,earlier,audio,motion,sound,note,view,onError,preferences});
-    this.inView=false;this.hidden=false;this.userPaused=reduced;this.soundWanted=true;this.failed=new Set();this.epoch=0;
+    this.inView=false;this.hidden=false;this.userPaused=reduced;this.soundWanted=true;this.failed=new Set();this.epoch=0;this.pendingPlay=new Map();
     this.present.muted=this.earlier.muted=true;this.audio.volume=.14;
     for(const v of [present,earlier]){
       v.addEventListener('loadeddata',()=>{if(this.data){v.classList.add('has-frame');this.sync();}});
@@ -23,23 +23,34 @@ export class MemoryMedia {
     if(data.ambient){this.audio.loop=true;this.audio.preload='auto';this.audio.src='./assets/'+data.ambient;this.audio.load();}
     this.sync();
   }
+  // Loading, preferences and pointer events can all arrive before play() settles.
+  // One pending request per stream avoids duplicated decoder work; old promises
+  // cannot pause the next room's audio after its source has already changed.
+  play(media,ready,failed){
+    if(this.pendingPlay.has(media))return;
+    const request={epoch:this.epoch};this.pendingPlay.set(media,request);
+    const current=()=>this.pendingPlay.get(media)===request&&request.epoch===this.epoch;
+    let result;try{result=media.play();}catch(error){if(current()){this.pendingPlay.delete(media);failed?.(error);}return;}
+    Promise.resolve(result).then(()=>{if(!current())return;this.pendingPlay.delete(media);ready?.();},error=>{if(!current())return;this.pendingPlay.delete(media);failed?.(error);});
+  }
+  pause(media){this.pendingPlay.delete(media);media.pause();}
   sync(){
     if(!this.data?.videoNow)return;
     const epoch=this.epoch,playing=this.inView&&!this.hidden&&!this.userPaused;
     this.motion.textContent=this.userPaused?'Play moving memories':'Pause moving memories';this.motion.setAttribute('aria-pressed',String(this.userPaused));
     for(const v of [this.present,this.earlier]){
-      if(!playing||this.failed.has(v)){v.pause();continue;}
-      if(v.paused)v.play().catch(error=>{if(epoch===this.epoch&&this.inView&&!this.hidden&&!this.userPaused&&error.name!=='AbortError'){this.userPaused=true;this.present.pause();this.earlier.pause();this.audio.pause();this.motion.textContent='Play moving memories';this.motion.setAttribute('aria-pressed','true');this.sound.textContent='Scene sound off';this.sound.setAttribute('aria-pressed','false');}});
+      if(!playing||this.failed.has(v)){this.pause(v);continue;}
+      if(v.paused)this.play(v,()=>{if(!this.inView||this.hidden||this.userPaused)this.pause(v);},error=>{if(epoch===this.epoch&&this.inView&&!this.hidden&&!this.userPaused&&error.name!=='AbortError'){this.userPaused=true;this.pause(this.present);this.pause(this.earlier);this.pause(this.audio);this.motion.textContent='Play moving memories';this.motion.setAttribute('aria-pressed','true');this.sound.textContent='Scene sound off';this.sound.setAttribute('aria-pressed','false');}});
     }
     const site=this.preferences();this.sound.disabled=!site.enabled;this.sound.title=site.enabled?'Present-day scene sound, softly mixed with the site music.':'Site sound is muted';
     const sounding=playing&&site.enabled&&this.soundWanted&&!this.failed.has(this.audio)&&!this.failed.has(this.present);
     if(sounding){
-      if(this.audio.paused){if(Number.isFinite(this.audio.duration))this.audio.currentTime=Math.min(this.present.currentTime,Math.max(0,this.audio.duration-.05));this.audio.play().then(()=>{if(epoch!==this.epoch||this.hidden||!this.inView||this.userPaused||!this.soundWanted||!this.preferences().enabled){this.audio.pause();return;}this.sound.textContent='Scene sound on';this.sound.setAttribute('aria-pressed','true');}).catch(error=>{if(epoch===this.epoch&&this.inView&&!this.hidden&&!this.userPaused&&error.name!=='AbortError'){this.sound.textContent='Enable scene sound';this.sound.setAttribute('aria-pressed','false');}});}
-    }else this.audio.pause();
+      if(this.audio.paused&&!this.pendingPlay.has(this.audio)){if(Number.isFinite(this.audio.duration))this.audio.currentTime=Math.min(this.present.currentTime,Math.max(0,this.audio.duration-.05));this.play(this.audio,()=>{if(this.hidden||!this.inView||this.userPaused||!this.soundWanted||!this.preferences().enabled){this.pause(this.audio);return;}this.sound.textContent='Scene sound on';this.sound.setAttribute('aria-pressed','true');},error=>{if(epoch===this.epoch&&this.inView&&!this.hidden&&!this.userPaused&&error.name!=='AbortError'){this.sound.textContent='Enable scene sound';this.sound.setAttribute('aria-pressed','false');}});}
+    }else this.pause(this.audio);
     this.sound.textContent=sounding&&!this.audio.paused?'Scene sound on':'Scene sound off';this.sound.setAttribute('aria-pressed',String(sounding&&!this.audio.paused));
   }
   release(){
-    this.epoch++;this.data=null;this.view.classList.remove('has-moving-memories');
+    this.epoch++;this.pendingPlay.clear();this.data=null;this.view.classList.remove('has-moving-memories');
     for(const media of [this.present,this.earlier,this.audio]){media.pause();media.removeAttribute('src');media.load();media.classList.remove('has-frame');}
   }
 }

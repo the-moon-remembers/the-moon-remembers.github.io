@@ -8,7 +8,7 @@ if(choice){
     preload.disconnect();
     // Prepare only the small detail-page code. Never fetch all six films or
     // initialise a second renderer / camera behind the current page.
-    for(const [rel,href] of [['prefetch','./lost.html?v=signals23'],...['lost','memory-water','memory-media','memory-records','memory-interaction'].map(name=>['modulepreload',`./${name}.js?v=signals23`])]){
+    for(const [rel,href] of [['prefetch','./lost.html?v=performance27'],...['lost','memory-water','memory-media','memory-records','memory-interaction'].map(name=>['modulepreload',`./${name}.js?v=performance27`])]){
       const link=document.createElement('link');link.rel=rel;link.href=href;
       if(rel==='preload')link.as='image';
       link.fetchPriority='low';document.head.append(link);
@@ -24,7 +24,7 @@ document.querySelectorAll('#explore-chapter .crater').forEach(crater=>{
 if(gained){
   const observer=new IntersectionObserver(entries=>{
     if(!entries.some(entry=>entry.isIntersecting))return;
-    observer.disconnect();import('./gained.js?v=flow6').catch(()=>{
+    observer.disconnect();import('./gained.js?v=performance27').catch(()=>{
       gained.querySelectorAll('.object-fallback').forEach(label=>{label.textContent=window.MoonI18n?.t('Interactive models could not load. Please refresh.')??'Interactive models could not load. Please refresh.';});
     });
   },{rootMargin:'400px 0px',threshold:0});

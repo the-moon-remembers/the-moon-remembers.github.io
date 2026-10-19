@@ -2,5 +2,20 @@
 @keyframes gain-float{from{transform:translateY(-9px)}to{transform:translateY(12px)}}@keyframes gain-turn{to{transform:rotate(360deg)}}
 .map-study canvas{width:min(100%,520px);margin:20px auto}.island-render{margin:65px 0 25px;min-height:240px;display:grid;align-items:center}.island-render canvas{max-height:310px;object-fit:contain}.objects .section-heading h2{font-size:clamp(36px,3.5vw,64px)}
 .caption-accessible{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.object-switcher{display:none}
+@media(max-width:650px) and (orientation:portrait){
+  .objects.phone-object-mode .object-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:0 0 14px;border:1px solid #aec5d53d;padding:5px;border-radius:40px}
+  .objects.phone-object-mode .object-switcher button{min-width:0;min-height:44px;padding:10px 6px;background:transparent;border:0;border-radius:30px;font:inherit;font-size:clamp(10px,2.7vw,12px);letter-spacing:.03em;line-height:1.4;color:var(--muted);transition:background .2s,color .2s}
+  .objects.phone-object-mode .object-switcher button[aria-selected=true]{background:#aec5d525;color:var(--moon);box-shadow:inset 0 0 0 1px #fdf1d750}
+  .objects.phone-object-mode .object-switcher button:focus-visible{outline:2px solid var(--moon);outline-offset:3px}
+  html[lang=zh-Hans] .objects.phone-object-mode .object-switcher button{font-size:18px;letter-spacing:.08em}
+  .objects.phone-object-mode .object-grid{display:block;min-height:530px}
+  .objects.phone-object-mode .object-item[hidden]{display:none!important}
+  .objects.phone-object-mode .object-view{height:clamp(290px,76vw,360px)}
+  .objects.phone-object-mode .object-progress{margin:16px 0 20px}
+  .objects.phone-object-mode .object-caption{min-height:clamp(300px,calc(420px - 30vw),330px)}
+  .objects.phone-object-mode .object-caption h3{min-height:3.2em;margin:14px 0 8px}
+  .objects.phone-object-mode .object-caption p{min-height:0;margin:0}
+}
 @media(max-width:900px){.gain-opening{padding:45px 7vw 90px;grid-template-columns:1fr 1fr}.gain-opening h1{font-size:clamp(40px,7vw,70px)}.opening-orbit{width:66vw;margin-left:0}.gain-section{padding:70px 7vw}.shore-layout{gap:5vw}.object-grid{gap:20px}.object-view{height:250px}.object-caption h3{font-size:17px}.gdp-row{grid-template-columns:65px 1fr 130px;gap:18px;font-size:16px}}
 @media(max-width:650px){.gain-opening{display:block;min-height:750px}.gain-opening h1{font-size:48px;position:relative;z-index:2}.gain-lede{font-size:17px;position:relative;z-index:2}.opening-orbit{position:absolute;width:80vw;right:-35vw;top:210px;opacity:.55}.opening-orbit span{display:none}.gain-scroll{position:relative;z-index:2}.gain-opening>small{right:7vw;font-size:11px;line-height:1.8}.section-heading{grid-template-columns:1fr;gap:10px;margin-bottom:40px}.section-heading>p:last-child{font-size:17px}.shore-layout{grid-template-columns:1fr;gap:35px}.study-top{font-size:10px}.archive-copy{min-height:0}.archive-year{font-size:42px}.archive-measure strong{font-size:36px}.gdp-row{grid-template-columns:50px 1fr 100px;gap:12px;font-size:13px}.bar-track{height:24px}.chart-top{font-size:11px}.economy-facts,.island-comparison{grid-template-columns:1fr;gap:30px}.object-grid{grid-template-columns:1fr;gap:48px}.object-view{height:300px}.object-caption h3{font-size:22px}.object-caption p{min-height:0}.object-progress{margin-top:15px}.objects-end{padding-top:70px}.gain-section{padding-top:65px;padding-bottom:65px}}

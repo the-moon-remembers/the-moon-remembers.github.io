@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three/three.module.min.js';
 import {archiveMemories} from './ending-memory-data.js?v=signals23';
-import {photoPools,createPhotoChannel} from './tv-photo-channels.js?v=signals23';
+import {photoPools,createPhotoChannel} from './tv-photo-channels.js?v=performance27';
 
 // Three distinct recordings appear once each. The remaining photographic sets
 // use disjoint archive pools, so no two televisions repeat the same content.
@@ -112,7 +112,7 @@ export function mountTelevisionEnding(section){
   window.MoonI18n?.add(COPY);
   section.innerHTML=`<div class="tv-ending__sticky"><header class="tv-ending__header"><div><p class="tv-ending__eyebrow">05 / THE LAST SIGNAL</p><h2 id="last-signal-title">A city keeps<br><em>sending memories.</em></h2></div><p class="tv-ending__intro">The story does not end at the edge of the screen. Follow a signal back to the beginning, or open a memory once more.</p></header><div class="tv-ending__stage"><canvas class="tv-ending__canvas" aria-label="The last signal, an interactive wall of vintage televisions"></canvas><button class="tv-ending__screen-link" type="button" data-destination="home" aria-label="Return to Home" disabled><span>Home</span></button><button class="tv-ending__screen-link" type="button" data-destination="explore" aria-label="Return to Explore" disabled><span>Explore</span></button></div><p class="tv-ending__instruction" aria-live="polite">Keep scrolling. Let the screens turn towards you.</p><div class="tv-ending__fallback"><p>Your browser cannot display the television wall. The journey continues through these links.</p><nav aria-label="Chapter navigation"><button type="button" data-destination="home">Home</button><button type="button" data-destination="explore">Explore</button></nav></div></div><footer class="tv-ending__credits"><p class="tv-ending__signature">One city. One moon.<span>XIAMEN / THE MOON REMEMBERS</span></p><p class="tv-ending__disclaimer">Some images, recordings and music are sourced from the internet or supplied by the designer. This educational portfolio explores city memory; all rights remain with their respective creators. For attribution, correction or removal requests, please use the author’s contact details included with the accompanying portfolio.</p></footer>`;
   const stage=section.querySelector('.tv-ending__stage'),canvas=stage.querySelector('canvas'),instruction=section.querySelector('.tv-ending__instruction'),credits=section.querySelector('.tv-ending__credits'),reduced=matchMedia('(prefers-reduced-motion: reduce)'),buttons=[...section.querySelectorAll('[data-destination]')],cleanups=[];
-  let disposed=false,renderer,visible=false,raf=0,facing=false,progress=0,width=1,height=1,lastFrameTime=0;
+  let disposed=false,renderer,visible=false,raf=0,facing=false,progress=0,width=1,height=1,lastFrameTime=0,buttonsDirty=true;
   let settleTimer=0,settling=false,settleLocked=false,forwardIntentUntil=0,touchY=null,lastSectionTop=section.getBoundingClientRect().top;
   function cancelSettle(stop=false){
     if(settleTimer){clearTimeout(settleTimer);settleTimer=0;}
@@ -196,6 +196,7 @@ export function mountTelevisionEnding(section){
     });
   }
   const photoChannels=photoPools(archiveMemories,4).map((records,index)=>createPhotoChannel({records,load:loadPhotograph,duration:[14.8,17.3,19.1,22.4][index],fadeDuration:1.8,phase:[.12,.37,.57,.76][index],onChange:schedule}));
+  const photoFrameStates=photoChannels.map(()=>({}));
   photoChannels.forEach(channel=>channel.setReduced(reduced.matches));
   function navTexture(label){
     const c=document.createElement('canvas');c.width=640;c.height=480;const ctx=c.getContext('2d');const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;textures.add(tex);
@@ -251,8 +252,12 @@ export function mountTelevisionEnding(section){
   camera.position.set(0,.55,20);camera.lookAt(0,.30,0);
   const corner=new THREE.Vector3();
   function updateButtons(){
-    rig.updateWorldMatrix(true,true);
-    navScreens.forEach(({screen,button,sw,sh})=>{let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const x of[-sw/2,sw/2])for(const y of[-sh/2,sh/2]){corner.set(x,y,0);screen.localToWorld(corner);corner.project(camera);const px=(corner.x*.5+.5)*width,py=(-corner.y*.5+.5)*height;minX=Math.min(minX,px);maxX=Math.max(maxX,px);minY=Math.min(minY,py);maxY=Math.max(maxY,py);}button.style.left=`${(minX+maxX)/2}px`;button.style.top=`${(minY+maxY)/2}px`;button.style.width=`${Math.max(44,maxX-minX)}px`;button.style.height=`${Math.max(44,maxY-minY)}px`;button.disabled=!facing;button.tabIndex=facing?0:-1;});
+    // The cabinet moves only during its arrival or a layout change. Do not
+    // traverse the pile/project its hit areas on every later page scroll, or
+    // while it is offscreen. A returning scene projects before its next paint.
+    const project=visible&&buttonsDirty;if(project)rig.updateWorldMatrix(true,true);
+    navScreens.forEach(({screen,button,sw,sh})=>{if(project){let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;for(const x of[-sw/2,sw/2])for(const y of[-sh/2,sh/2]){corner.set(x,y,0);screen.localToWorld(corner);corner.project(camera);const px=(corner.x*.5+.5)*width,py=(-corner.y*.5+.5)*height;minX=Math.min(minX,px);maxX=Math.max(maxX,px);minY=Math.min(minY,py);maxY=Math.max(maxY,py);}button.style.left=`${(minX+maxX)/2}px`;button.style.top=`${(minY+maxY)/2}px`;button.style.width=`${Math.max(44,maxX-minX)}px`;button.style.height=`${Math.max(44,maxY-minY)}px`;}if(button.disabled===facing)button.disabled=!facing;const tab=facing?0:-1;if(button.tabIndex!==tab)button.tabIndex=tab;});
+    if(project)buttonsDirty=false;
   }
   function startMedia(){
     media.forEach(slot=>{
@@ -263,7 +268,7 @@ export function mountTelevisionEnding(section){
   function syncMedia(){const active=visible&&!document.hidden&&progress>.84;if(active)startMedia();else{media.forEach(slot=>slot.videoElement?.pause());lastFrameTime=0;}photoChannels.forEach(channel=>{channel.setReduced(reduced.matches);channel.setActive(active);});}
   function schedule(){if(disposed||raf||!visible||document.hidden)return;raf=requestAnimationFrame(frame);}
   function scroll(){
-    const rect=section.getBoundingClientRect(),downward=lastSectionTop-rect.top>.5,upward=rect.top-lastSectionTop>.5,next=reduced.matches?1:ease(clamp((innerHeight*.85-rect.top)/(innerHeight*.73)));lastSectionTop=rect.top;progress=next;instruction.style.opacity=credits.getBoundingClientRect().top<innerHeight-25?'0':'1';
+    const rect=section.getBoundingClientRect(),downward=lastSectionTop-rect.top>.5,upward=rect.top-lastSectionTop>.5,next=reduced.matches?1:ease(clamp((innerHeight*.85-rect.top)/(innerHeight*.73)));lastSectionTop=rect.top;if(progress!==next)buttonsDirty=true;progress=next;if(visible)instruction.style.opacity=credits.getBoundingClientRect().top<innerHeight-25?'0':'1';
     if(upward){forwardIntentUntil=0;cancelSettle(true);}
     // Ten degrees or less from frontal is already a clear, usable screen.
     // Enable the projected hit areas before the final scroll pixels are spent.
@@ -274,10 +279,10 @@ export function mountTelevisionEnding(section){
   function frame(time){
     raf=0;if(disposed||!visible||document.hidden)return;const delta=lastFrameTime?clamp((time-lastFrameTime)/1000,0,.1):0;lastFrameTime=time;
     screenMaterials.forEach(m=>{m.uniforms.uTime.value=reduced.matches?0:time/1000;m.uniforms.uMotion.value=reduced.matches?0:1;});
-    photoChannels.forEach((channel,index)=>{channel.setReduced(reduced.matches);const state=channel.tick(delta),u=photoScreens.get(index).uniforms,current=state.currentResource,next=state.nextResource||current;u.uPhoto.value=current?1:0;u.uNoise.value=current?0:1;if(current){u.uMap.value=current.texture;u.uNextMap.value=next.texture;u.uImageAspect.value=current.aspect;u.uNextImageAspect.value=next.aspect;u.uBlend.value=state.blend;u.uPhotoProgress.value.set(state.currentProgress,state.nextProgress);}});
+    photoChannels.forEach((channel,index)=>{const state=channel.tick(delta,photoFrameStates[index]),u=photoScreens.get(index).uniforms,current=state.currentResource,next=state.nextResource||current;u.uPhoto.value=current?1:0;u.uNoise.value=current?0:1;if(current){u.uMap.value=current.texture;u.uNextMap.value=next.texture;u.uImageAspect.value=current.aspect;u.uNextImageAspect.value=next.aspect;u.uBlend.value=state.blend;u.uPhotoProgress.value.set(state.currentProgress,state.nextProgress);}});
     renderer.render(scene,camera);schedule();
   }
-  function resize(){width=stage.clientWidth;height=stage.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;const vertical=11.6,horizontal=12.1/Math.max(camera.aspect,.2),fit=Math.max(vertical,horizontal);camera.position.z=fit/(2*Math.tan(THREE.MathUtils.degToRad(18)));camera.lookAt(0,.30,0);camera.updateProjectionMatrix();camera.updateMatrixWorld();updateButtons();schedule();}
+  function resize(){width=stage.clientWidth;height=stage.clientHeight;if(!width||!height)return;renderer.setSize(width,height,false);camera.aspect=width/height;const vertical=11.6,horizontal=12.1/Math.max(camera.aspect,.2),fit=Math.max(vertical,horizontal);camera.position.z=fit/(2*Math.tan(THREE.MathUtils.degToRad(18)));camera.lookAt(0,.30,0);camera.updateProjectionMatrix();camera.updateMatrixWorld();buttonsDirty=true;updateButtons();schedule();}
   function visibility(){if(document.hidden){forwardIntentUntil=0;cancelSettle(true);}syncMedia();schedule();}
   function layoutOrMotionChanged(){forwardIntentUntil=0;cancelSettle(true);scroll();}
   function language(){navScreens.forEach(nav=>nav.paint());const text=facing?'Choose a screen. A familiar place is waiting.':'Keep scrolling. Let the screens turn towards you.';instruction.textContent=window.MoonI18n?.t(text)||text;schedule();}

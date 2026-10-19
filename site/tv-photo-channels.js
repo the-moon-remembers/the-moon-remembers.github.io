@@ -7,7 +7,7 @@ export function photoPools(records,count=4){
 export function createPhotoChannel({records,load,duration=16,fadeDuration=1.8,phase=0,onChange=()=>{}}){
   const pool=[...records];let active=false,reduced=false,disposed=false,current=null,next=null,pending=null,candidate=0,elapsed=duration*phase,clock=0,retryAt=0,failures=0;
   const clamp=n=>Math.max(0,Math.min(1,n));
-  function state(){return{active,reduced,disposed,current:current?.record||null,next:next?.record||null,currentResource:current?.resource||null,nextResource:next?.resource||null,blend:next?clamp((elapsed-duration)/fadeDuration):0,currentProgress:clamp(elapsed/(duration+fadeDuration)),nextProgress:clamp(Math.max(0,elapsed-duration)/(duration+fadeDuration)),elapsed,clock,pending:!!pending,resident:(current?1:0)+(next?1:0),owned:(current?1:0)+(next?1:0)+(pending?1:0)};}
+  function state(out={}){out.active=active;out.reduced=reduced;out.disposed=disposed;out.current=current?.record||null;out.next=next?.record||null;out.currentResource=current?.resource||null;out.nextResource=next?.resource||null;out.blend=next?clamp((elapsed-duration)/fadeDuration):0;out.currentProgress=clamp(elapsed/(duration+fadeDuration));out.nextProgress=clamp(Math.max(0,elapsed-duration)/(duration+fadeDuration));out.elapsed=elapsed;out.clock=clock;out.pending=!!pending;out.resident=(current?1:0)+(next?1:0);out.owned=(current?1:0)+(next?1:0)+(pending?1:0);return out;}
   function ensure(){
     if(disposed||!active||pending||!pool.length||clock<retryAt||next||(current&&(reduced||pool.length<2)))return;
     let index=candidate%pool.length;if(current&&index===current.index)index=(index+1)%pool.length;
@@ -30,14 +30,14 @@ export function createPhotoChannel({records,load,duration=16,fadeDuration=1.8,ph
     getState:state,
     setActive(value){if(disposed)return;active=!!value;ensure();},
     setReduced(value){if(disposed)return;reduced=!!value;ensure();},
-    tick(delta){
-      if(disposed||!active||reduced)return state();
+    tick(delta,out){
+      if(disposed||!active||reduced)return state(out);
       const step=Math.max(0,Math.min(.15,Number.isFinite(delta)?delta:0));clock+=step;
       if(current){elapsed+=step;if(!next)elapsed=Math.min(elapsed,duration);}
       if(current&&next&&elapsed>=duration+fadeDuration){
         const previous=current;current=next;next=null;elapsed=fadeDuration;previous.resource?.dispose?.();onChange(state());
       }
-      ensure();return state();
+      ensure();return state(out);
     },
     dispose(){if(disposed)return;disposed=true;active=false;pending=null;current?.resource?.dispose?.();next?.resource?.dispose?.();current=null;next=null;onChange(state());}
   };

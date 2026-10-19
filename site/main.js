@@ -189,8 +189,14 @@ function setScale() {
   }
   previousPortrait=portrait;
 }
+const stageValues = new WeakMap();
 function write(stage, values) {
-  for (const [name, value] of Object.entries(values)) stage.style.setProperty(name, String(value));
+  let previous=stageValues.get(stage);
+  if(!previous){previous=new Map();stageValues.set(stage,previous);}
+  for(const [name,value] of Object.entries(values)){
+    const text=String(value);
+    if(previous.get(name)!==text){stage.style.setProperty(name,text);previous.set(name,text);}
+  }
 }
 
 function updateIntro(p) {
@@ -213,12 +219,15 @@ function updateIntro(p) {
     "--intro-line-opacity": (1 - range(p, .79, .89)).toFixed(3)
   });
   const count = Math.round(phrase.length * typeIn * (1 - typeOut));
-  introLine.textContent = phrase.slice(0, count);
+  const text=phrase.slice(0,count);
+  if(introLine.textContent!==text)introLine.textContent=text;
   shaderState.fade = range(p, .37, .78);
 }
 
 let historyPosition = 0;
 let previousHistoryTime = null;
+let previousHistoryActive = -1;
+const timelineAnchors = events.map(e => (e.x + e.size / 2 + e.tx + e.tw / 2) / 2);
 function updateHistory(p, now) {
   const timeline = range(p, .05, .83);
   const exit = range(p, .86, 1);
@@ -236,8 +245,7 @@ function updateHistory(p, now) {
   const low = Math.floor(historyPosition);
   const high = Math.min(events.length - 1, low + 1);
   const local = historyPosition - low;
-  const anchors = events.map(e => (e.x + e.size / 2 + e.tx + e.tw / 2) / 2);
-  const anchor = mix(anchors[low], anchors[high], local);
+  const anchor = mix(timelineAnchors[low], timelineAnchors[high], local);
   const trackX = 555 - anchor;
   const enterY = -220 * (1 - range(p, 0, .045)) - 470 * exit;
 
@@ -252,21 +260,29 @@ function updateHistory(p, now) {
     "--timeline-up": `${-270 * exit}px`,
     "--marker-opacity": Math.min(range(p, .015, .045), 1 - range(p, .88, 1)).toFixed(3)
   });
-  yearNodes.forEach((node, index) => {
-    node.style.setProperty("--active-scale", index === active ? "1.34" : "1");
-    node.style.setProperty("--year-opacity", index === active ? "1" : ".5");
-    node.style.zIndex = index === active ? "1" : "0";
-  });
+  if(active!==previousHistoryActive){
+    yearNodes.forEach((node,index)=>{
+      node.style.setProperty("--active-scale",index===active?"1.34":"1");
+      node.style.setProperty("--year-opacity",index===active?"1":".5");
+      node.style.zIndex=index===active?"1":"0";
+    });
+    previousHistoryActive=active;
+  }
   captionStates.forEach(state => {
     const x = state.design.x + trackX;
     const width = state.design.width * state.design.scale;
     const visible = p > .02 && p < .96 && x < 1080 && x + width > 30;
     if (visible && state.started === null && state.glyphs.length) state.started = now;
-    if (p < .015) { state.started=null; state.count=-1; state.glyphs.forEach(glyph=>{glyph.style.opacity="0";}); }
+    if(p<.015){
+      // Reset once, not once per glyph on every frame before this chapter.
+      if(state.count!==0)state.glyphs.forEach(glyph=>{glyph.style.opacity="0";});
+      state.started=null;state.count=0;
+    }
     if (state.started === null) return;
     const count = reducedMotion ? state.glyphs.length : Math.min(state.glyphs.length, Math.floor((now - state.started) / 15));
     if (count !== state.count) {
-      state.glyphs.forEach((glyph,index) => { glyph.style.opacity=index < count ? "1" : "0"; });
+      if(state.count<0)state.glyphs.forEach((glyph,index)=>{glyph.style.opacity=index<count?"1":"0";});
+      else for(let i=Math.min(state.count,count);i<Math.max(state.count,count);i++)state.glyphs[i].style.opacity=i<count?"1":"0";
       state.count = count;
     }
   });
@@ -294,8 +310,9 @@ function updateChoice(p, now) {
     const typing = reducedMotion?1:range(now - choiceStart, 250, 1000);
     const leftCount = Math.round(leftQuestion.length * typing);
     const rightCount = Math.round(rightQuestion.length * typing);
-    leftEnglish.textContent = leftQuestion.slice(leftQuestion.length - leftCount);
-    rightEnglish.textContent = rightQuestion.slice(0, rightCount);
+    const left=leftQuestion.slice(leftQuestion.length-leftCount),right=rightQuestion.slice(0,rightCount);
+    if(leftEnglish.textContent!==left)leftEnglish.textContent=left;
+    if(rightEnglish.textContent!==right)rightEnglish.textContent=right;
   }
 }
 
@@ -422,19 +439,53 @@ function createContourShader() {
 
 const contour = createContourShader();
 const shaderState = {fade:0};
+const storySections=[intro,history,choice,document.querySelector('#explore-chapter'),document.querySelector('#gained-chapter')].filter(Boolean);
+let storyFrame=0,storyDirty=true,storyEntered=true,lastIntroProgress=-1,lastHistoryProgress=-1,lastChoiceProgress=-1;
+function requestStoryFrame(){if(!storyFrame&&!document.hidden)storyFrame=requestAnimationFrame(frame);}
+function invalidateStory(){storyDirty=true;requestStoryFrame();}
+function stopStory(){if(storyFrame)cancelAnimationFrame(storyFrame);storyFrame=0;previousHistoryTime=null;}
 function frame(now) {
-  updateIntro(progress(intro));
-  updateHistory(progress(history), now);
-  updateChoice(progress(choice), now);
-  const introBounds=intro.getBoundingClientRect();
-  // Keep full-quality rendering and elapsed time whenever visible; don't spend GPU time offscreen.
-  if(!document.hidden&&introBounds.bottom>0&&introBounds.top<innerHeight)contour.render(now/1000, shaderState.fade);
-  const current=[intro,history,choice,document.querySelector('#explore-chapter'),document.querySelector('#gained-chapter')].filter(Boolean).reverse().find(section=>{if(section.hidden)return false;const r=section.getBoundingClientRect();return r.top<=innerHeight*.35&&r.bottom>innerHeight*.35;});
-  if(current){const pinned=current===intro||current===history||current===choice;viewportAnchor={section:current,pinned,fraction:Math.max(0,-current.getBoundingClientRect().top)/Math.max(1,current.offsetHeight-(pinned?innerHeight:0))};}
-  requestAnimationFrame(frame);
+  storyFrame=0;
+  if(document.hidden)return;
+  // Read layout together, before any CSS/text changes. Later chapters need a
+  // single scroll/resize update, not a perpetual loop over invisible SVGs.
+  const metrics=storySections.map(section=>{
+    if(section.hidden)return null;
+    const bounds=section.getBoundingClientRect(),height=section.offsetHeight;
+    return{section,bounds,height,p:clamp(-bounds.top/Math.max(1,height-innerHeight)),visible:bounds.bottom>0&&bounds.top<innerHeight};
+  });
+  const [introMetric,historyMetric,choiceMetric]=metrics;
+  const ip=introMetric.p,hp=historyMetric.p,cp=choiceMetric.p;
+  if(storyDirty||introMetric.visible||ip!==lastIntroProgress)updateIntro(ip);
+  if(!historyMetric.visible||!storyEntered){historyPosition=Math.round(range(hp,.05,.83)*(events.length-1));previousHistoryTime=null;}
+  if(storyDirty||historyMetric.visible||hp!==lastHistoryProgress)updateHistory(hp,now);
+  // The final scheduled frame may land just after 1000ms: paint its complete
+  // text once before the loop sleeps, rather than leaving the last glyph out.
+  if(storyDirty||choiceMetric.visible||cp!==lastChoiceProgress)updateChoice(cp,now);
+  // Identical contour resolution, shader and elapsed time while it can be seen.
+  if(storyEntered&&introMetric.visible)contour.render(now/1000,shaderState.fade);
+  for(let i=metrics.length-1;i>=0;i--){
+    const metric=metrics[i];
+    if(!metric||metric.bounds.top>innerHeight*.35||metric.bounds.bottom<=innerHeight*.35)continue;
+    const pinned=i<3;
+    viewportAnchor={section:metric.section,pinned,fraction:Math.max(0,-metric.bounds.top)/Math.max(1,metric.height-(pinned?innerHeight:0))};
+    break;
+  }
+  lastIntroProgress=ip;lastHistoryProgress=hp;lastChoiceProgress=cp;storyDirty=false;
+  const choiceTyping=choiceMetric.visible&&choiceStart!==null&&now-choiceStart<=1000;
+  if(storyEntered&&(introMetric.visible||historyMetric.visible||choiceTyping))requestStoryFrame();
 }
 
-window.addEventListener("resize", setScale, {passive:true});
+window.addEventListener('scroll',requestStoryFrame,{passive:true});
+window.addEventListener("resize",()=>{setScale();invalidateStory();},{passive:true});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopStory();else invalidateStory();});
+window.addEventListener('pagehide',stopStory);
+window.addEventListener('pageshow',invalidateStory);
+if(typeof ResizeObserver==='function'){
+  const layoutObserver=new ResizeObserver(invalidateStory);
+  storySections.forEach(section=>layoutObserver.observe(section));
+}
+document.fonts?.ready.then(invalidateStory);
 const info = document.querySelector("#info-toggle");
 const credit = document.querySelector("#credit-overlay");
 function setCredit(open) {
@@ -448,16 +499,19 @@ info.addEventListener("mouseleave", () => {if(matchMedia('(hover: hover)').match
 info.addEventListener("focus", () => {if(!creditTouch)setCredit(true);});
 info.addEventListener("blur", () => setCredit(false));
 info.addEventListener("click", () => setCredit(!introStage.classList.contains("credit-open")));
-function syncHomeLanguage(){const zh=document.documentElement.lang==='zh-Hans';phrase=zh?'明月依旧。\n旧城已远。':'The Moon Remains.\nThe City Gone.';leftQuestion=zh?'我们\n获得了\n什么\n？':'WHAT WE\nHAVE\nGAINED\n?';rightQuestion=zh?'我们\n失去了\n什么\n？':'WHAT WE\nHAVE\nLOST\n?';introLine.setAttribute('aria-label',phrase.replace('\n',' '));leftEnglish.setAttribute('aria-label',zh?'我们获得了什么？':'What we have gained?');rightEnglish.setAttribute('aria-label',zh?'我们失去了什么？':'What we have lost?');captionStates.forEach(s=>{s.glyphs=zh?s.chineseGlyphs:s.englishGlyphs;s.count=-1;s.element.setAttribute('aria-label',zh?historyChinese[s.index]:s.design.text);});}
+function syncHomeLanguage(){const zh=document.documentElement.lang==='zh-Hans';phrase=zh?'明月依旧。\n旧城已远。':'The Moon Remains.\nThe City Gone.';leftQuestion=zh?'我们\n获得了\n什么\n？':'WHAT WE\nHAVE\nGAINED\n?';rightQuestion=zh?'我们\n失去了\n什么\n？':'WHAT WE\nHAVE\nLOST\n?';introLine.setAttribute('aria-label',phrase.replace('\n',' '));leftEnglish.setAttribute('aria-label',zh?'我们获得了什么？':'What we have gained?');rightEnglish.setAttribute('aria-label',zh?'我们失去了什么？':'What we have lost?');captionStates.forEach(s=>{s.glyphs=zh?s.chineseGlyphs:s.englishGlyphs;s.count=-1;s.element.setAttribute('aria-label',zh?historyChinese[s.index]:s.design.text);});invalidateStory();}
 window.addEventListener('moon-language-change',syncHomeLanguage);syncHomeLanguage();
 document.querySelector(".choice-button-lost").addEventListener("click",()=>window.MoonNavigation.go('home','explore-chapter'));
 function syncChoiceJourney(){
   let visited=false,gainedUnlocked=false;try{({lostVisited:visited,gainedUnlocked}=parent.MoonApp.getState());}catch{}
+  try{storyEntered=parent.MoonApp.getState().entered!==false;}catch{storyEntered=true;}
   // Hidden physical sections prevent skipping Explore via wheel, touch or keyboard.
   // Once Explore is activated, the whole remainder stays open in both directions.
   for(const section of document.querySelectorAll('#explore-chapter,#gained-chapter')){
-    section.hidden=!gainedUnlocked;section.inert=!gainedUnlocked;
+    if(section.hidden===gainedUnlocked)section.hidden=!gainedUnlocked;
+    if(section.inert===gainedUnlocked)section.inert=!gainedUnlocked;
   }
+  invalidateStory();
 }
 window.addEventListener('moon-preferences',syncChoiceJourney);syncChoiceJourney();
 function resetChapterTransition() {
@@ -468,4 +522,4 @@ function resetChapterTransition() {
 window.addEventListener("pageshow",event=>{if(event.persisted)resetChapterTransition();});
 window.addEventListener("moon-navigation-restored",resetChapterTransition);
 setScale();
-requestAnimationFrame(frame);
+requestStoryFrame();

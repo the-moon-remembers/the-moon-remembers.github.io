@@ -1,6 +1,7 @@
 (() => {
 // Exact, reversible copy translations. Numbers, names, original Chinese and URLs stay unchanged.
 const copy={
+"Object categories":"物件类别","PHONE":"通讯","BOATS":"渡海",
 "THE MOON":"月照","REMEMBERS":"旧城","THE MOON REMEMBERS":"月照旧城","The Moon Remembers":"月照旧城","Home":"首页","Gained":"获得","Lost":"失去","Main navigation":"主导航","Chapter navigation":"章节导航","00 / THE BEGINNING":"00 / 回到起点","01 / THE OTHER SIDE":"01 / 获得","02 / THE ABSENCE":"02 / 失去","One city. One moon.":"一座城，一轮月。","Xiamen · a city memory / interactive prototype":"厦门 · 城市记忆 / 交互原型",
 "Some images and materials are sourced from the internet.":"部分图像与素材来源于互联网。","Image and material credits":"图像与素材来源说明","The Moon Remembers, introduction":"月照旧城 · 序章","A timeline of Xiamen":"厦门历史时间轴","Timeline years":"历史年份","What we have gained and lost":"我们获得与失去的","What we have gained?":"我们获得了什么？","What we have lost?":"我们失去了什么？","Open the gained chapter":"进入获得篇章","Open the lost chapter":"进入失去篇章","The Moon Remains. The City Gone.":"明月依旧，旧城已远。",
 "01 / GAINED · XIAMEN":"01 / 获得 · 厦门","A CITY":"一座城市","REACHES":"不断向远方","FURTHER.":"延伸。","Land drawn from the sea.":"向海而生的新土地。","Journeys made shorter.":"日渐缩短的旅途。","New possibilities in an ordinary day.":"寻常日子里的新可能。","Explore the changing shore":"探索变迁中的海岸","A SHORE IS NEVER STILL":"海岸从未停止变化","WHAT WE GAIN DOES NOT ERASE WHAT WE LOSE.":"新的获得，并不抹去曾经的失去。",

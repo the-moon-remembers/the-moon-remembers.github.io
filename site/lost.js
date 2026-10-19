@@ -1,11 +1,14 @@
-import {MemoryWater} from './memory-water.js?v=signals23';
-import {memories} from './memory-records.js?v=signals23';
-import {MemoryMedia} from './memory-media.js?v=signals23';
-import {brushRadius,MemoryGuidance} from './memory-interaction.js?v=signals23';
+import {MemoryWater} from './memory-water.js?v=performance27';
+import {memories} from './memory-records.js?v=performance27';
+import {MemoryMedia} from './memory-media.js?v=performance27';
+import {brushRadius,MemoryGuidance} from './memory-interaction.js?v=performance27';
 const $=s=>document.querySelector(s);
 const room=$('#memory-room'),view=$('#memory-view'),canvas=$('#memory-canvas'),range=$('#reveal-range'),status=$('#interaction-status'),video=$('#hand-video'),cameraButton=$('#camera-toggle');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let water=null,active=null,loadId=0,pointer=null,demoStart=0,stream=null,landmarker=null,cameraBusy=false,cameraEpoch=0,lastVideoTime=-1,lastDetection=0,handPoints=[],lastFrame=0,inView=false;
+let water=null,active=null,loadId=0,pointer=null,demoStart=0,stream=null,landmarker=null,cameraBusy=false,cameraEpoch=0,lastVideoTime=-1,lastDetection=0,handPoints=[],lastFrame=0,inView=false,frameRequest=null,pageActive=true;
+function canDraw(){return pageActive&&active&&inView&&!document.hidden&&water?.ready;}
+function suspendFrame(){if(frameRequest!=null)cancelAnimationFrame(frameRequest);frameRequest=null;lastFrame=0;}
+function wakeFrame(){if(frameRequest!=null||!canDraw())return;lastFrame=0;frameRequest=requestAnimationFrame(frame);}
 const touches=new Map();
 const prompt=$('#scene-prompt');
 const guidance=new MemoryGuidance(()=>{prompt.classList.add('is-dismissed');prompt.setAttribute('aria-hidden','true');});
@@ -16,14 +19,15 @@ function clearTouches(){for(const id of [...touches.keys()])if(view.hasPointerCa
 function touchPoint(e){const r=view.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height)),radius:brushRadius.touch};}
 function updateTouch(e){if(!touches.has(e.pointerId)&&touches.size>=5)return false;touches.set(e.pointerId,touchPoint(e));view.dataset.touchPoints=String(touches.size);demoStart=0;pointer=null;return true;}
 const media=new MemoryMedia({present:$('#scene-present-video'),earlier:$('#scene-earlier-video'),audio:$('#street-audio'),motion:$('#motion-toggle'),sound:$('#ambient-toggle'),note:$('#ambient-note'),view,reduced,onError:setStatus,preferences:()=>{try{return parent.MoonApp?.getState()||{enabled:true};}catch{return{enabled:true};}}});
-new IntersectionObserver(entries=>{inView=entries[0].isIntersecting;media.inView=inView;media.sync();if(!inView&&(stream||cameraBusy))stopCamera('The camera was turned off when this page left the foreground.');},{threshold:.01}).observe(view);
+media.hidden=document.hidden;
+new IntersectionObserver(entries=>{inView=entries[0].isIntersecting;media.inView=inView;media.sync();if(inView)wakeFrame();else{suspendFrame();if(stream||cameraBusy)stopCamera('The camera was turned off when this page left the foreground.');}},{threshold:.01}).observe(view);
 const image=src=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('image'));img.src='./assets/'+src;});
 function setStatus(text){if(status.textContent!==text)status.textContent=text;}
 function stopCamera(message){cameraEpoch++;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;handPoints=[];cameraBusy=false;cameraButton.disabled=false;cameraButton.textContent='Enable hand tracking';cameraButton.setAttribute('aria-pressed','false');$('#camera-preview').hidden=true;if(message)setStatus(message);}
 function creditLink(href,text){const a=document.createElement('a');a.href=href;a.textContent=text;a.target='_blank';a.rel='noopener noreferrer';return a;}
 async function route(key=location.hash.slice(1)){
   if(!memories[key])key='arcades';
-  const data=memories[key];stopCamera();clearTouches();water?.stopVideos();media.release();if(water)water.ready=false;demoStart=0;pointer=null;
+  const data=memories[key];suspendFrame();stopCamera();clearTouches();water?.stopVideos();if(water)water.ready=false;demoStart=0;pointer=null;
   active=key;const version=++loadId;room.hidden=false;canvas.hidden=true;
   $('#memory-title').textContent=data.title;$('#memory-number').textContent=data.number;$('#memory-subtitle').textContent=data.subtitle;$('#scene-place').textContent=data.place;
   for(const period of ['now','old']){ $('#'+period+'-heading').textContent=data[period+'Heading'];$('#'+period+'-copy').textContent=data[period+'Copy'];$('#'+period+'-caption').textContent=data[period+'Caption'];$('#'+period+'-still').src='./assets/'+data[period];$('#'+period+'-still').alt=data[period+'Caption']; }
@@ -40,6 +44,7 @@ async function route(key=location.hash.slice(1)){
     try{const error=await preparing;if(version!==loadId)return;if(error)throw error;water.onVideoError=()=>setStatus('A video could not load. The still images and water interaction remain available.');water.setImages(now,old);water.reveal=0;water.resize();canvas.hidden=false;view.dataset.renderer='webgl';}
     catch(error){console.warn('Water rendering unavailable',error);canvas.hidden=true;view.dataset.renderer='image';setStatus('Water rendering is unavailable in this browser. Use the slider to compare the photographs.');}
     if(data.videoNow&&water?.ready)water.setVideos($('#scene-present-video'),$('#scene-earlier-video'));
+    wakeFrame();
   }catch(error){if(version!==loadId)return;$('#scene-loading').textContent='Images could not load. Please refresh to try again.';setStatus('The story and chapter navigation are still available.');}
 }
 view.addEventListener('pointerdown',e=>{if(stream||e.pointerType==='mouse')return;if(updateTouch(e))view.setPointerCapture?.(e.pointerId);});
@@ -60,21 +65,23 @@ cameraButton.addEventListener('click',async()=>{
   try{
     const camera=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:640},height:{ideal:480}},audio:false});
     if(epoch!==cameraEpoch){camera.getTracks().forEach(t=>t.stop());return;}stream=camera;video.srcObject=camera;await video.play();
-    if(!landmarker){const {FilesetResolver,HandLandmarker}=await import('./vendor/mediapipe/vision_bundle.mjs');const files=await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');landmarker=await HandLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'./vendor/mediapipe/hand_landmarker.task',delegate:'CPU'},runningMode:'VIDEO',numHands:1,minHandDetectionConfidence:.55,minTrackingConfidence:.5});}
+    if(!landmarker){const {FilesetResolver,HandLandmarker}=await import('./vendor/mediapipe/vision_bundle.mjs');if(epoch!==cameraEpoch)return;const files=await FilesetResolver.forVisionTasks('./vendor/mediapipe/wasm');if(epoch!==cameraEpoch)return;const prepared=await HandLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'./vendor/mediapipe/hand_landmarker.task',delegate:'CPU'},runningMode:'VIDEO',numHands:1,minHandDetectionConfidence:.55,minTrackingConfidence:.5});if(epoch!==cameraEpoch){prepared.close?.();return;}landmarker=prepared;}
     if(epoch!==cameraEpoch)return;cameraBusy=false;cameraButton.disabled=false;cameraButton.textContent='Disable hand tracking';cameraButton.setAttribute('aria-pressed','true');$('#camera-preview').hidden=false;pointer=null;range.value=0;water.reveal=0;lastVideoTime=-1;setStatus('Open one hand towards the camera. Move gently to stir the water with five fingertips.');
   }catch(error){if(epoch!==cameraEpoch)return;stopCamera();setStatus(error.name==='NotAllowedError'?'Camera permission was declined. The pointer, touchscreen and slider still work.':error.name==='NotFoundError'?'No camera was found. Use the pointer, touchscreen or slider.':'Hand tracking could not start. Try again, or continue with the pointer and slider.');console.warn('Hand tracking unavailable',error);}
 });
-function frame(now){const dt=Math.min(40,now-lastFrame||16.7);lastFrame=now;guidance.tick(now);
-  if(active&&inView&&!document.hidden&&water?.ready){
+function frame(now){frameRequest=null;if(!canDraw())return;const dt=Math.min(40,now-lastFrame||16.7);lastFrame=now;guidance.tick(now);
+  if(canDraw()){
     if(stream&&!cameraBusy&&landmarker&&video.readyState>=2&&now-lastDetection>65&&video.currentTime!==lastVideoTime){lastDetection=now;lastVideoTime=video.currentTime;try{const result=landmarker.detectForVideo(video,now);const targets=result.landmarks[0]?[4,8,12,16,20].map(i=>({x:1-result.landmarks[0][i].x,y:result.landmarks[0][i].y,radius:brushRadius.hand})):[];if(targets.some((p,i)=>handPoints[i]&&Math.hypot(p.x-handPoints[i].x,p.y-handPoints[i].y)>.002))guidance.move(now);handPoints=targets.map((p,i)=>{const last=handPoints[i]||p;return {...p,x:last.x+(p.x-last.x)*.55,y:last.y+(p.y-last.y)*.55};});setStatus(handPoints.length?'Five fingertips tracked. Sweep slowly to bring the earlier image to the surface.':'Keep one open hand fully inside the camera view.');}catch(error){stopCamera('Hand tracking stopped and the camera is off. Continue exploring with the pointer.');}}
     let points=stream?handPoints:touches.size?[...touches.values()]:pointer?[pointer]:[];
     if(demoStart){const t=(now-demoStart)/5200;if(t>1){demoStart=0;setStatus('The demonstration has ended. Sweep the pointer or enable hand tracking.');}else points=Array.from({length:5},(_,i)=>({x:.18+t*.62+Math.sin(t*8+i*.45)*.055,y:.28+i*.085+Math.sin(t*6+i*.3)*.10,radius:brushRadius.hand}));}
     water.setPoints(points);water.shift=reduced?[0,0]:points.length?[(points[0].x-.5)*2,(points[0].y-.5)*2]:[0,0];water.draw(dt);
-  }requestAnimationFrame(frame);
+  }if(canDraw())frameRequest=requestAnimationFrame(frame);
 }
 window.addEventListener('hashchange',()=>route());
-window.addEventListener('pagehide',()=>{loadId++;stopCamera();clearTouches();water?.stopVideos();media.release();});document.addEventListener('visibilitychange',()=>{media.hidden=document.hidden;media.sync();if(document.hidden){stopCamera('The camera was turned off when this page left the foreground.');clearTouches();}});canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();stopCamera();clearTouches();water?.stopVideos();water?.observer?.disconnect();canvas.hidden=true;view.dataset.renderer='image';water=null;setStatus('Graphics were interrupted. Use the comparison slider to continue.');});
-route();requestAnimationFrame(frame);
+window.addEventListener('pagehide',()=>{loadId++;pageActive=false;suspendFrame();stopCamera();clearTouches();water?.stopVideos();water?.dispose?.();water=null;landmarker?.close?.();landmarker=null;media.release();});
+window.addEventListener('pageshow',event=>{if(event.persisted){pageActive=true;media.hidden=document.hidden;route();}});
+document.addEventListener('visibilitychange',()=>{media.hidden=document.hidden;media.sync();if(document.hidden){suspendFrame();stopCamera('The camera was turned off when this page left the foreground.');clearTouches();}else wakeFrame();});canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();suspendFrame();stopCamera();clearTouches();water?.stopVideos();water?.dispose?.();canvas.hidden=true;view.dataset.renderer='image';water=null;setStatus('Graphics were interrupted. Use the comparison slider to continue.');});
+route();
 // The detail layout is ready: a buffering film must not hold the page curtain.
 // The loader/posters stay visible until the full water renderer is prepared.
 document.body.dataset.shellReady='true';try{parent.MoonApp?.chapterReady?.(window);}catch{}
