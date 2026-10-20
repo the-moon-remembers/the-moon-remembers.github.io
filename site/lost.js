@@ -1,7 +1,7 @@
 import {MemoryWater} from './memory-water.js?v=performance27';
 import {memories} from './memory-records.js?v=performance27';
 import {MemoryMedia} from './memory-media.js?v=loading28';
-import {brushRadius,MemoryGuidance} from './memory-interaction.js?v=performance27';
+import {brushRadius,MemoryGuidance} from './memory-interaction.js?v=interaction30';
 const $=s=>document.querySelector(s);
 const room=$('#memory-room'),view=$('#memory-view'),canvas=$('#memory-canvas'),range=$('#reveal-range'),status=$('#interaction-status'),video=$('#hand-video'),cameraButton=$('#camera-toggle');
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;

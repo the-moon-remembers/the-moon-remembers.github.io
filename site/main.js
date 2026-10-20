@@ -445,13 +445,75 @@ function updateChoice(p, now) {
   }
 }
 
+// Phone portrait touch gestures advance one date, regardless of swipe length.
+// Keep scroll-position rendering and the original photograph loader untouched.
+function createPortraitYearSwipe({count,enabled,getProgress,select,leave,advance,now}){
+  let gesture=null;
+  const indexAt=p=>Math.round(Math.min(1,Math.max(0,(p-.05)/.78))*(count-1));
+  function reset(){gesture=null;}
+  function start(event){
+    reset();
+    if(!enabled()||event.touches.length!==1||event.target?.closest?.('a,input,textarea,select,[contenteditable=true]'))return;
+    const point=event.touches[0],p=getProgress();
+    gesture={id:point.identifier,x:point.clientX,y:point.clientY,index:indexAt(p),captured:p>=.035&&p<=.86,side:p<.035?-1:p>.86?1:0,used:false,until:Infinity};
+  }
+  function scroll(){
+    if(!gesture)return;
+    if(!enabled()||now()>gesture.until){reset();return;}
+    if(gesture.captured)return;
+    const p=getProgress();
+    // Catch an incoming native fling at the first/last date, even if its finger
+    // has lifted. The same gesture cannot coast through several unread years.
+    if((gesture.side===-1&&p>=.035)||(gesture.side===1&&p<=.86)){
+      gesture.captured=true;gesture.used=true;gesture.index=gesture.side===-1?0:count-1;
+      select(gesture.index);
+    }
+  }
+  function move(event){
+    if(!gesture)return false;
+    if(!enabled()||event.touches.length!==1){reset();return false;}
+    const point=event.touches[0];
+    if(point.identifier!==gesture.id){reset();return false;}
+    scroll();if(!gesture?.captured)return false;
+    const dx=point.clientX-gesture.x,dy=gesture.y-point.clientY;
+    if(!gesture.used&&Math.abs(dx)>Math.abs(dy))return false;
+    if(event.cancelable!==false)event.preventDefault();
+    if(gesture.used||Math.abs(dy)<24)return true;
+    gesture.used=true;
+    const direction=dy>0?1:-1,next=gesture.index+direction;
+    if(next<0)leave();
+    else if(next>=count)advance();
+    else select(next);
+    return true;
+  }
+  function end(){
+    if(!gesture)return;
+    if(gesture.captured)reset();
+    else gesture.until=now()+1500;
+  }
+  return{start,move,end,scroll,reset};
+}
+const phoneTimeline=matchMedia('(max-width:650px) and (orientation:portrait)');
+const portraitYearSwipe=createPortraitYearSwipe({
+  count:events.length,enabled:()=>phoneTimeline.matches&&!document.hidden,
+  getProgress:()=>{const top=history.getBoundingClientRect().top;return -top/Math.max(1,history.offsetHeight-innerHeight);},
+  select:index=>{cancelHistoryAdvance();window.scrollTo({top:scrollY+history.getBoundingClientRect().top+Math.max(1,history.offsetHeight-innerHeight)*(.05+.78*index/(events.length-1)),behavior:'instant'});},
+  leave:()=>{cancelHistoryAdvance();window.scrollTo({top:Math.max(0,scrollY+history.getBoundingClientRect().top-innerHeight*.6),behavior:reducedMotion?'instant':'smooth'});},
+  advance:()=>advanceHistoryToChoice(true),now:()=>performance.now()
+});
+window.addEventListener('scroll',portraitYearSwipe.scroll,{passive:true});
+phoneTimeline.addEventListener?.('change',portraitYearSwipe.reset);
+window.addEventListener('pagehide',portraitYearSwipe.reset);
+document.addEventListener('visibilitychange',portraitYearSwipe.reset);
+window.addEventListener('moon-navigation-restored',portraitYearSwipe.reset);
+
 // The final date is a destination, not another long empty scroll corridor.
 let historyAdvanceUntil=0,historyTouchY=null;
 function historyChoiceReady(p,position){return p>=.79&&p<.96&&position>=events.length-1-.10;}
-function advanceHistoryToChoice(){
+function advanceHistoryToChoice(phoneFinalYear=false){
   const now=performance.now();
   if(now<historyAdvanceUntil)return true;
-  if(!historyChoiceReady(progress(history),historyPosition)||progress(choice)>=.24)return false;
+  if(!historyChoiceReady(progress(history),phoneFinalYear?events.length-1:historyPosition)||progress(choice)>=.24)return false;
   historyAdvanceUntil=now+1300;
   const top=scrollY+choice.getBoundingClientRect().top;
   window.scrollTo({top:top+Math.max(0,choice.offsetHeight-innerHeight)*.27,behavior:reducedMotion?'instant':'smooth'});
@@ -459,9 +521,10 @@ function advanceHistoryToChoice(){
 }
 function cancelHistoryAdvance(){if(performance.now()<historyAdvanceUntil)window.scrollTo({top:scrollY,behavior:'instant'});historyAdvanceUntil=0;}
 window.addEventListener('wheel',e=>{if(e.ctrlKey)return;if(e.deltaY<0){cancelHistoryAdvance();return;}if(e.deltaY>0&&advanceHistoryToChoice())e.preventDefault();},{passive:false});
-window.addEventListener('touchstart',e=>{historyTouchY=e.touches.length===1?e.touches[0].clientY:null;},{passive:true});
-window.addEventListener('touchmove',e=>{if(historyTouchY===null||e.touches.length!==1)return;const dy=historyTouchY-e.touches[0].clientY;if(dy<-12){cancelHistoryAdvance();historyTouchY=null;}else if(dy>12&&advanceHistoryToChoice())e.preventDefault();},{passive:false});
-window.addEventListener('touchend',()=>{historyTouchY=null;},{passive:true});
+window.addEventListener('touchstart',e=>{portraitYearSwipe.start(e);historyTouchY=e.touches.length===1?e.touches[0].clientY:null;},{passive:true});
+window.addEventListener('touchmove',e=>{if(portraitYearSwipe.move(e))return;if(historyTouchY===null||e.touches.length!==1)return;const dy=historyTouchY-e.touches[0].clientY;if(dy<-12){cancelHistoryAdvance();historyTouchY=null;}else if(dy>12&&advanceHistoryToChoice())e.preventDefault();},{passive:false});
+window.addEventListener('touchend',()=>{portraitYearSwipe.end();historyTouchY=null;},{passive:true});
+window.addEventListener('touchcancel',()=>{portraitYearSwipe.reset();historyTouchY=null;},{passive:true});
 window.addEventListener('keydown',e=>{if(e.target.closest?.('input,textarea,select,[contenteditable=true]')||e.altKey||e.metaKey||e.ctrlKey)return;if(['ArrowUp','PageUp'].includes(e.key)){cancelHistoryAdvance();return;}if(['ArrowDown','PageDown',' '].includes(e.key)&&!e.shiftKey&&advanceHistoryToChoice())e.preventDefault();});
 
 // Returning to a decision should not replay its scroll-driven introduction.

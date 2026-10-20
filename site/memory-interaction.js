@@ -1,5 +1,7 @@
 // Activity is measured inside the scene, not from time spent reading the page.
-export const brushRadius=Object.freeze({mouse:.03,touch:.026,hand:.022});
+// Mouse midpoint between the original .07 stroke and the later .03 stroke.
+// Touch and camera fingertips retain their separately tuned sizes.
+export const brushRadius=Object.freeze({mouse:.05,touch:.026,hand:.022});
 export class MemoryGuidance {
   constructor(onDismiss){this.onDismiss=onDismiss;this.reset();}
   reset(){this.started=null;this.last=null;this.dismissed=false;}
